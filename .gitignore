@@ -1,0 +1,86 @@
+# Environnement / Secrets
+.env
+.env.*
+!.env.example
+
+# Base de données locale (SQLite)
+*.sqlite3
+*.sqlite3-journal
+
+# Dossiers spécifiques au système d'exploitation
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.gl
+ehthumbs_vista.gl
+[Tt]humbs.db
+Desktop.ini
+
+# Python / Django
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environnements virtuels Python
+venv/
+env/
+ENV/
+env.bak/
+
+venv.bak/
+
+# Django : Fichiers médias (téléchargements des utilisateurs)
+# media/
+#backend/media/
+#backend/media/*
+#!backend/media/.gitkeep
+
+# Fichiers statiques collectés
+staticfiles/
+backend/staticfiles/
+
+# Frontend / Node.js
+frontend/node_modules/
+frontend/dist/
+frontend/.eslintcache
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Fichiers IDE / Éditeurs
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+
+# Fichiers de log
+*.log
+logs/
+
+# Docker
+.docker/
+docker-compose.override.yml

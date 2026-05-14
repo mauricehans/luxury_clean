@@ -1,0 +1,148 @@
+
+
+### 1. Structure des Tables (Schéma Relationnel)
+
+#### Table `users` (Administrateurs & Super Admins)
+Gère les accès au back-office et le système de rôles.
+*   `id` (Primary Key, INT, Auto-increment)
+*   `name` (VARCHAR 100)
+*   `email` (VARCHAR 150, UNIQUE)
+*   `password` (VARCHAR 255, Hash)
+*   `role` (ENUM : 'super_admin', 'admin')
+*   `created_at` (TIMESTAMP)
+
+#### Table `quotes` (Demandes de Devis - B2B & B2C unifiés)
+Centralise toutes les demandes. L'astuce ici est de supprimer le champ booléen `is_read` (est-ce lu ?) pour respecter la 3ème forme normale : si `read_by_user_id` est rempli, alors le message est lu.
+*   `id` (Primary Key, INT)
+*   `client_type` (ENUM : 'B2B', 'B2C')
+*   `first_name` (VARCHAR 100)
+*   `last_name` (VARCHAR 100)
+*   `email` (VARCHAR 150)
+*   `phone` (VARCHAR 20)
+*   `surface_m2` (INT, nullable)
+*   `message` (TEXT)
+*   `ip_address` (VARCHAR 45) -> *Pour l'analytique et l'origine des devis*
+*   `read_by_user_id` (Foreign Key -> `users.id`, NULLable) -> *Identifie quel admin a lu le message*
+*   `read_at` (TIMESTAMP, NULLable)
+*   `created_at` (TIMESTAMP)
+
+#### Table `job_applications` (Recrutement)
+Gère les candidatures, avec le même système de traçabilité de lecture que les devis.
+*   `id` (Primary Key, INT)
+*   `first_name` (VARCHAR 100)
+*   `last_name` (VARCHAR 100)
+*   `email` (VARCHAR 150)
+*   `phone` (VARCHAR 20)
+*   `cv_file_path` (VARCHAR 255)
+*   `message` (TEXT)
+*   `read_by_user_id` (Foreign Key -> `users.id`, NULLable)
+*   `read_at` (TIMESTAMP, NULLable)
+*   `created_at` (TIMESTAMP)
+
+#### Table `posts` (Le Blog / Portfolio des interventions)
+Pour montrer le travail du client de manière dynamique.
+*   `id` (Primary Key, INT)
+*   `title` (VARCHAR 150)
+*   `slug` (VARCHAR 150, UNIQUE) -> *Pour des URL SEO-friendly (ex: /blog/nettoyage-bureaux)*
+*   `content` (TEXT)
+*   `image_before_path` (VARCHAR 255, NULLable)
+*   `image_after_path` (VARCHAR 255, NULLable)
+*   `published_at` (TIMESTAMP)
+
+#### Table `settings` (Paramètres dynamiques du site)
+Une table clé-valeur pour permettre à l'admin de modifier l'email et WhatsApp sans toucher au code.
+*   `key_name` (Primary Key, VARCHAR 50) -> *Ex: 'contact_email', 'whatsapp_number'*
+*   `value` (VARCHAR 255) -> *Ex: 'contact@luxclean.fr', '+33612345678'*
+
+#### Table `analytics` (Suivi de l'affluence et IP)
+Stocke les visites globales pour générer les statistiques du tableau de bord.
+*   `id` (Primary Key, BIGINT)
+*   `ip_address` (VARCHAR 45) -> *Permet de grouper les visites uniques*
+*   `visited_url` (VARCHAR 255)
+*   `visited_at` (TIMESTAMP)
+
+***
+
+### 2. Les Relations (Clés Étrangères)
+
+*   **`quotes.read_by_user_id` -> `users.id` (1 à N)** : Un administrateur peut lire plusieurs devis, mais un devis n'a besoin d'être "marqué comme lu" que par le premier administrateur qui l'ouvre.
+*   **`job_applications.read_by_user_id` -> `users.id` (1 à N)** : Même logique pour les candidatures.
+
+***
+
+### 3. Explication des Formes Normales (FN) sur ce schéma
+
+Votre base de données respecte les principes de normalisation pour éviter toute redondance et anomalie de mise à jour :
+
+1.  **Première Forme Normale (1NF) :** 
+    Tous les attributs sont "atomiques". Par exemple, nous avons séparé `first_name` et `last_name` au lieu d'avoir un champ `nom_complet`. Il n'y a pas de listes séparées par des virgules dans une colonne.
+2.  **Deuxième Forme Normale (2NF) :** 
+    Toutes les tables ont une Clé Primaire unique (`id` ou `key_name`). Tous les autres champs dépendent entièrement de cette clé primaire, et non d'une partie de la clé.
+3.  **Troisième Forme Normale (3NF) :** 
+    Il n'y a pas de dépendances transitives (un champ qui dépendrait d'un autre champ non-clé). 
+    *Exemple appliqué* : Au lieu d'avoir un champ `is_read` (booléen) ET un champ `read_by_user_id`, nous n'avons gardé que `read_by_user_id`. Si l'on avait gardé `is_read`, ce champ aurait dépendu du remplissage de `read_by_user_id`, ce qui viole la 3NF. Ici, si `read_by_user_id` est NULL, le message est non lu. S'il contient un ID, le message est lu et l'on sait par qui.
+------------------------------------------------------------------------------------------------------------------
+SCHEMA MERMAIND
+erDiagram
+    USERS {
+        INT id PK
+        VARCHAR name
+        VARCHAR email UK
+        VARCHAR password
+        ENUM role "super_admin ou admin"
+        TIMESTAMP created_at
+    }
+
+    QUOTES {
+        INT id PK
+        ENUM client_type "B2B ou B2C"
+        VARCHAR first_name
+        VARCHAR last_name
+        VARCHAR email
+        VARCHAR phone
+        INT surface_m2 "nullable"
+        TEXT message
+        VARCHAR ip_address
+        INT read_by_user_id FK "nullable"
+        TIMESTAMP read_at "nullable"
+        TIMESTAMP created_at
+    }
+
+    JOB_APPLICATIONS {
+        INT id PK
+        VARCHAR first_name
+        VARCHAR last_name
+        VARCHAR email
+        VARCHAR phone
+        VARCHAR cv_file_path
+        TEXT message
+        INT read_by_user_id FK "nullable"
+        TIMESTAMP read_at "nullable"
+        TIMESTAMP created_at
+    }
+
+    POSTS {
+        INT id PK
+        VARCHAR title
+        VARCHAR slug UK
+        TEXT content
+        VARCHAR image_before_path "nullable"
+        VARCHAR image_after_path "nullable"
+        TIMESTAMP published_at
+    }
+
+    SETTINGS {
+        VARCHAR key_name PK
+        VARCHAR value
+    }
+
+    ANALYTICS {
+        BIGINT id PK
+        VARCHAR ip_address
+        VARCHAR visited_url
+        TIMESTAMP visited_at
+    }
+
+    %% Relations
+    USERS ||--o{ QUOTES : "lit (read_by_user_id)"
+    USERS ||--o{ JOB_APPLICATIONS : "lit (read_by_user_id)"
