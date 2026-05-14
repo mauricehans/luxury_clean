@@ -56,6 +56,10 @@ def seed():
     print("Creating settings...")
     Setting.objects.create(key_name='contact_email', value='contact@luxclean.fr')
     Setting.objects.create(key_name='whatsapp_number', value='+33612345678')
+    Setting.objects.create(key_name='address_street', value='16bis Avenue Aristide Briand')
+    Setting.objects.create(key_name='address_zipcode', value='34170')
+    Setting.objects.create(key_name='address_city', value='Castelnau-le-Lez')
+    Setting.objects.create(key_name='address_map_link', value='https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2888.163353459141!2d3.902264515496738!3d43.62396347912185!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x12b6af1275eb1bc3%3A0xc3f5c760d62a343b!2s16%20Avenue%20Aristide%20Briand%2C%2034170%20Castelnau-le-Lez!5e0!3m2!1sfr!2sfr!4v1689178923485!5m2!1sfr!2sfr')
 
     print("Seed completed!")
 

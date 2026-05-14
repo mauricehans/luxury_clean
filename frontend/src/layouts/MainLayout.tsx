@@ -19,6 +19,7 @@ const MainLayout = () => {
                 <Link to="/portfolio" className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-blue-600">Réalisations</Link>
                 <Link to="/actualites" className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-blue-600">Actualités</Link>
                 <Link to="/recrutement" className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-blue-600">Recrutement</Link>
+                <Link to="/contact" className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-blue-600">Contact</Link>
               </div>
             </div>
             <div className="flex items-center">

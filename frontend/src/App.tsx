@@ -7,6 +7,7 @@ import Quote from './pages/Quote';
 import Recruitment from './pages/Recruitment';
 import Blog from './pages/Blog';
 import Actualites from './pages/Actualites';
+import Contact from './pages/Contact';
 import AdminLayout from './layouts/AdminLayout';
 import AdminLogin from './pages/admin/Login';
 import AdminDashboard from './pages/admin/Dashboard';
@@ -25,6 +26,7 @@ function App() {
           <Route path="recrutement" element={<Recruitment />} />
           <Route path="portfolio" element={<Blog />} />
           <Route path="actualites" element={<Actualites />} />
+          <Route path="contact" element={<Contact />} />
         </Route>
         
         <Route path="/admin" element={<AdminLayout />}>

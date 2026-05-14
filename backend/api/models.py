@@ -108,7 +108,7 @@ class Portfolio(models.Model):
 
 class Setting(models.Model):
     key_name = models.CharField(max_length=50, primary_key=True)
-    value = models.CharField(max_length=255)
+    value = models.TextField()
 
     def __str__(self):
         return self.key_name
