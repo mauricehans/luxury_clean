@@ -2,7 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     UserViewSet, QuoteViewSet, JobApplicationViewSet,
-    PostViewSet, PortfolioViewSet, SettingViewSet, AnalyticsViewSet
+    PostViewSet, PortfolioViewSet, SettingViewSet, AnalyticsViewSet,
+    AnalyticsSummaryView, me_view,
 )
 
 router = DefaultRouter()
@@ -16,4 +17,6 @@ router.register(r'analytics', AnalyticsViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('me/', me_view, name='me'),
+    path('analytics/summary/', AnalyticsSummaryView.as_view(), name='analytics_summary'),
 ]
