@@ -1,23 +1,98 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.utils import timezone
-from .models import User, Quote, JobApplication, Post, Portfolio, Setting, Analytics
+from django.db.models import Count
+from datetime import timedelta
+
+from .models import (
+    User, Quote, JobApplication, Post, Portfolio, Setting, Analytics, QuoteDocument
+)
 from .serializers import (
     UserSerializer, QuoteSerializer, QuoteCreateSerializer,
     JobApplicationSerializer, JobApplicationCreateSerializer,
-    PostSerializer, PortfolioSerializer, SettingSerializer, AnalyticsSerializer
+    PostSerializer, PortfolioSerializer, SettingSerializer, AnalyticsSerializer,
 )
 
-class IsSuperAdmin(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role == 'super_admin')
 
+# =============================================================================
+# Permissions (Tâche 3.5)
+# =============================================================================
+class IsSuperAdmin(permissions.BasePermission):
+    """Seul un Super Admin peut accéder aux routes critiques (gestion des admins)."""
+    message = "Seul un Super Admin peut effectuer cette action."
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and getattr(request.user, 'role', None) == 'super_admin'
+        )
+
+
+# =============================================================================
+# Endpoint /api/me/ — utilisateur courant
+# =============================================================================
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def me_view(request):
+    """Retourne les informations de l'utilisateur connecté pour adapter le front."""
+    return Response(UserSerializer(request.user).data)
+
+
+# =============================================================================
+# Gestion des utilisateurs (Tâche 3.5 + 5.5)
+# Seul un Super Admin peut lister, créer, supprimer un compte admin.
+# =============================================================================
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
+    queryset = User.objects.all().order_by('-created_at')
     serializer_class = UserSerializer
     permission_classes = [IsSuperAdmin]
 
+    def create(self, request, *args, **kwargs):
+        """Création d'un admin classique par le Super Admin."""
+        data = request.data
+        password = data.get('password')
+        if not password or len(password) < 6:
+            return Response(
+                {'password': "Le mot de passe doit faire au moins 6 caractères."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if User.objects.filter(email=data.get('email', '')).exists():
+            return Response(
+                {'email': "Cet email est déjà utilisé."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = User(
+            email=data['email'],
+            name=data.get('name', ''),
+            role=data.get('role', 'admin'),
+            is_staff=True,
+        )
+        user.set_password(password)
+        user.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, *args, **kwargs):
+        """Empêche la suppression du Super Admin courant."""
+        user = self.get_object()
+        if user.pk == request.user.pk:
+            return Response(
+                {'detail': "Vous ne pouvez pas supprimer votre propre compte."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if user.role == 'super_admin':
+            return Response(
+                {'detail': "Impossible de supprimer un compte Super Admin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
+# =============================================================================
+# DEVIS (Tâches 3.2, 3.3, 3.4)
+# =============================================================================
 class QuoteViewSet(viewsets.ModelViewSet):
     queryset = Quote.objects.all().order_by('-created_at')
 
@@ -31,18 +106,22 @@ class QuoteViewSet(viewsets.ModelViewSet):
             return QuoteCreateSerializer
         return QuoteSerializer
 
+    def get_serializer_context(self):
+        """Permet au serializer de masquer 'read_by_user' aux non Super Admin (Tâche 5.2)."""
+        ctx = super().get_serializer_context()
+        ctx['request'] = self.request
+        return ctx
+
     def perform_create(self, serializer):
         ip = self.request.META.get('REMOTE_ADDR', '')
         quote = serializer.save(ip_address=ip)
-        
-        # Handle multiple files
         files = self.request.FILES.getlist('documents')
-        from .models import QuoteDocument
         for f in files:
             QuoteDocument.objects.create(quote=quote, file=f)
 
-    @action(detail=True, methods=['patch'])
-    def read(self, request, pk=None):
+    @action(detail=True, methods=['patch'], url_path='read')
+    def mark_read(self, request, pk=None):
+        """Tâche 3.4 : enregistre l'admin qui a lu le devis."""
         quote = self.get_object()
         if not quote.read_by_user:
             quote.read_by_user = request.user
@@ -50,6 +129,10 @@ class QuoteViewSet(viewsets.ModelViewSet):
             quote.save()
         return Response(self.get_serializer(quote).data)
 
+
+# =============================================================================
+# CANDIDATURES (Tâche 3.2, 3.3)
+# =============================================================================
 class JobApplicationViewSet(viewsets.ModelViewSet):
     queryset = JobApplication.objects.all().order_by('-created_at')
 
@@ -63,8 +146,13 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             return JobApplicationCreateSerializer
         return JobApplicationSerializer
 
-    @action(detail=True, methods=['patch'])
-    def read(self, request, pk=None):
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['request'] = self.request
+        return ctx
+
+    @action(detail=True, methods=['patch'], url_path='read')
+    def mark_read(self, request, pk=None):
         job = self.get_object()
         if not job.read_by_user:
             job.read_by_user = request.user
@@ -72,14 +160,20 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             job.save()
         return Response(self.get_serializer(job).data)
 
+
+# =============================================================================
+# POSTS / PORTFOLIO / SETTINGS
+# =============================================================================
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all().order_by('-published_at')
     serializer_class = PostSerializer
+    lookup_field = 'pk'
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
+
 
 class PortfolioViewSet(viewsets.ModelViewSet):
     queryset = Portfolio.objects.all().order_by('-published_at')
@@ -97,68 +191,42 @@ class PortfolioViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         portfolio = serializer.save()
         self._handle_image_pairs(portfolio, is_update=True)
-        
+
     def _handle_image_pairs(self, portfolio, is_update=False):
         from .models import PortfolioImagePair
         import json
-        
-        # If updating, we clear the existing pairs and recreate them based on the request
+
         if is_update:
             portfolio.image_pairs.all().delete()
-            
-            # Handle keeping existing pairs
             existing_pairs_str = self.request.data.get('existing_pairs', '[]')
             try:
                 existing_pairs = json.loads(existing_pairs_str)
                 for pair_data in existing_pairs:
-                    # We just recreate the record with the old URLs (Django FileField handles relative paths fine if they exist)
-                    # We need to strip the /media/ prefix if it exists to match what Django expects in the DB
-                    before_url = pair_data.get('before', '')
-                    after_url = pair_data.get('after', '')
-                    
-                    # Clean URLs to prevent accumulation of prefixes
-                    if before_url.startswith('http://localhost:8000/media/'):
-                        before_url = before_url.replace('http://localhost:8000/media/', '')
-                    elif before_url.startswith('/media/'):
-                        before_url = before_url.replace('/media/', '')
-                        
-                    if after_url.startswith('http://localhost:8000/media/'):
-                        after_url = after_url.replace('http://localhost:8000/media/', '')
-                    elif after_url.startswith('/media/'):
-                        after_url = after_url.replace('/media/', '')
-                        
+                    before_url = (pair_data.get('before') or '').replace('http://localhost:8000/media/', '').replace('/media/', '')
+                    after_url = (pair_data.get('after') or '').replace('http://localhost:8000/media/', '').replace('/media/', '')
                     PortfolioImagePair.objects.create(
                         portfolio=portfolio,
-                        image_before=before_url if before_url else None,
-                        image_after=after_url if after_url else None
+                        image_before=before_url or None,
+                        image_after=after_url or None,
                     )
             except json.JSONDecodeError:
                 pass
 
-        # Expecting new pairs in the format: image_before_0, image_after_0, image_before_1, image_after_1, etc.
         i = 0
         while True:
-            # We must check if the keys exist in request.data or FILES
-            has_before_key = f'image_before_{i}' in self.request.data or f'image_before_{i}' in self.request.FILES or f'image_before_{i}_marker' in self.request.data
-            has_after_key = f'image_after_{i}' in self.request.data or f'image_after_{i}' in self.request.FILES or f'image_after_{i}_marker' in self.request.data
-            
-            # If neither key exists, we've reached the end of the new pairs
-            if not has_before_key and not has_after_key:
-                break
-                
             before_file = self.request.FILES.get(f'image_before_{i}')
             after_file = self.request.FILES.get(f'image_after_{i}')
-            
-            # Create a pair if there is a file uploaded, OR if we are explicitly instructed to create a placeholder
-            if before_file or after_file or has_before_key or has_after_key:
-                # But don't create entirely empty pairs unless it's the only one
-                if before_file or after_file:
-                    PortfolioImagePair.objects.create(
-                        portfolio=portfolio,
-                        image_before=before_file if before_file else None,
-                        image_after=after_file if after_file else None
-                    )
+            marker = f'image_before_{i}_marker' in self.request.data
+            if not before_file and not after_file and not marker:
+                break
+            if before_file or after_file:
+                PortfolioImagePair.objects.create(
+                    portfolio=portfolio,
+                    image_before=before_file,
+                    image_after=after_file,
+                )
             i += 1
+
 
 class SettingViewSet(viewsets.ModelViewSet):
     queryset = Setting.objects.all()
@@ -169,11 +237,61 @@ class SettingViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
+
+# =============================================================================
+# ANALYTICS (Tâche 5.3)
+# =============================================================================
 class AnalyticsViewSet(viewsets.ModelViewSet):
-    queryset = Analytics.objects.all()
+    queryset = Analytics.objects.all().order_by('-visited_at')
     serializer_class = AnalyticsSerializer
 
     def get_permissions(self):
         if self.action == 'create':
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        ip = self.request.META.get('REMOTE_ADDR', '')
+        serializer.save(ip_address=ip)
+
+
+class AnalyticsSummaryView(APIView):
+    """Tâche 5.3 : Dashboard simple — nombre de visites et devis."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        now = timezone.now()
+        last_7_days = now - timedelta(days=7)
+
+        total_visits = Analytics.objects.count()
+        unique_visitors = Analytics.objects.values('ip_address').distinct().count()
+        visits_7d = Analytics.objects.filter(visited_at__gte=last_7_days).count()
+
+        # Daily breakdown for chart
+        daily = (
+            Analytics.objects
+            .filter(visited_at__gte=last_7_days)
+            .extra({'day': "date(visited_at)"})
+            .values('day')
+            .annotate(count=Count('id'))
+            .order_by('day')
+        )
+
+        top_pages = (
+            Analytics.objects
+            .values('visited_url')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:5]
+        )
+
+        return Response({
+            'total_visits': total_visits,
+            'unique_visitors': unique_visitors,
+            'visits_last_7_days': visits_7d,
+            'total_quotes': Quote.objects.count(),
+            'unread_quotes': Quote.objects.filter(read_by_user__isnull=True).count(),
+            'total_applications': JobApplication.objects.count(),
+            'unread_applications': JobApplication.objects.filter(read_by_user__isnull=True).count(),
+            'daily_visits': list(daily),
+            'top_pages': list(top_pages),
+        })

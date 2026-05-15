@@ -73,7 +73,7 @@ class JobApplication(models.Model):
     last_name = models.CharField(max_length=100)
     email = models.EmailField(max_length=150)
     phone = models.CharField(max_length=20)
-    cv_file = models.FileField(upload_to='cvs/', max_length=255)
+    cv_file = models.FileField(upload_to='cvs/', max_length=255, null=True, blank=True)
     message = models.TextField()
     
     read_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='jobs_read')
