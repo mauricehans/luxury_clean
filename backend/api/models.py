@@ -99,12 +99,21 @@ class Portfolio(models.Model):
     title = models.CharField(max_length=150)
     slug = models.SlugField(max_length=150, unique=True)
     description = models.TextField()
+    # legacy fields (kept for backwards compatibility but we will use PortfolioImagePair for multiple)
     image_before = models.ImageField(upload_to='portfolio/', null=True, blank=True, max_length=255)
     image_after = models.ImageField(upload_to='portfolio/', null=True, blank=True, max_length=255)
     published_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return self.title
+
+class PortfolioImagePair(models.Model):
+    portfolio = models.ForeignKey(Portfolio, related_name='image_pairs', on_delete=models.CASCADE)
+    image_before = models.ImageField(upload_to='portfolio/', null=True, blank=True, max_length=255)
+    image_after = models.ImageField(upload_to='portfolio/', null=True, blank=True, max_length=255)
+
+    def __str__(self):
+        return f"Pair for {self.portfolio.title}"
 
 class Setting(models.Model):
     key_name = models.CharField(max_length=50, primary_key=True)

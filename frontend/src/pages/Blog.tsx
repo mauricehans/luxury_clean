@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { Calendar, Image as ImageIcon } from 'lucide-react';
 
@@ -6,6 +7,33 @@ const Blog = () => {
   const [portfolios, setPortfolios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Add an interval for sliding images on the portfolio list
+  const [currentIndices, setCurrentIndices] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    if (portfolios.length === 0) return;
+    
+    const intervalId = setInterval(() => {
+      setCurrentIndices(prev => {
+        const next = { ...prev };
+        portfolios.forEach(portfolio => {
+          const pairs = portfolio.image_pairs && portfolio.image_pairs.length > 0 
+            ? portfolio.image_pairs 
+            : (portfolio.image_before || portfolio.image_after ? [portfolio] : []);
+          
+          if (pairs.length > 1) {
+            const currentIdx = prev[portfolio.id] || 0;
+            next[portfolio.id] = (currentIdx + 1) % pairs.length;
+          } else {
+            next[portfolio.id] = 0;
+          }
+        });
+        return next;
+      });
+    }, 4000); // 4 seconds
+    
+    return () => clearInterval(intervalId);
+  }, [portfolios]);
   useEffect(() => {
     apiClient.get('/portfolio/')
       .then(res => {
@@ -20,6 +48,9 @@ const Blog = () => {
 
   const getFileUrl = (url: string) => {
     if (!url) return '';
+    if (url.startsWith('http://localhost:8000/media/http')) {
+      return url.replace('http://localhost:8000/media/', '');
+    }
     if (url.startsWith('http')) return url;
     return `http://localhost:8000${url}`;
   };
@@ -48,43 +79,55 @@ const Blog = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
-            {portfolios.map(portfolio => (
-              <div key={portfolio.id} className="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+            {portfolios.map(portfolio => {
+              const pairs = portfolio.image_pairs && portfolio.image_pairs.length > 0 
+                ? portfolio.image_pairs 
+                : (portfolio.image_before || portfolio.image_after ? [portfolio] : []);
+              
+              const currentIndex = currentIndices[portfolio.id] || 0;
+              const currentPair = pairs[currentIndex] || portfolio;
+
+              return (
+              <Link to={`/portfolio/${portfolio.id}`} key={portfolio.id} className="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 block group">
                 
                 {/* Images Section Avant/Après */}
-                {(portfolio.image_before || portfolio.image_after) && (
-                  <div className="flex h-64 sm:h-80 bg-gray-100">
-                    {portfolio.image_before ? (
-                      <div className="flex-1 relative border-r-2 border-white">
+                {(currentPair.image_before || currentPair.image_after) && (
+                  <div className="flex h-64 sm:h-80 bg-gray-100 relative">
+                    {currentPair.image_before ? (
+                      <div className="flex-1 relative border-r-2 border-white overflow-hidden">
                         <img 
-                          src={getFileUrl(portfolio.image_before)} 
+                          src={getFileUrl(currentPair.image_before)} 
                           alt={`Avant - ${portfolio.title}`} 
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                         <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
-                          Avant
+                          {currentPair.image_after ? 'Avant' : 'Aperçu'}
                         </div>
                       </div>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center border-r-2 border-white bg-gray-200 text-gray-400">
-                        Pas d'image avant
-                      </div>
-                    )}
+                    ) : null}
                     
-                    {portfolio.image_after ? (
-                      <div className="flex-1 relative">
+                    {currentPair.image_after ? (
+                      <div className="flex-1 relative overflow-hidden">
                         <img 
-                          src={getFileUrl(portfolio.image_after)} 
+                          src={getFileUrl(currentPair.image_after)} 
                           alt={`Après - ${portfolio.title}`} 
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                         <div className="absolute top-4 right-4 bg-blue-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium shadow-md">
                           Après ✨
                         </div>
                       </div>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center bg-gray-200 text-gray-400">
-                        Pas d'image après
+                    ) : null}
+                    
+                    {/* Image indicators if multiple pairs */}
+                    {pairs.length > 1 && (
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-1 z-10">
+                        {pairs.map((_: any, idx: number) => (
+                          <div 
+                            key={idx} 
+                            className={`w-1.5 h-1.5 rounded-full ${idx === currentIndex ? 'bg-blue-600' : 'bg-white/70'}`}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -100,13 +143,19 @@ const Blog = () => {
                       day: 'numeric' 
                     })}
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">{portfolio.title}</h3>
-                  <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-blue-600 transition-colors">{portfolio.title}</h3>
+                  <p className="text-gray-600 leading-relaxed line-clamp-3">
                     {portfolio.description}
                   </p>
+                  <div className="mt-4">
+                    <span className="text-blue-600 font-semibold group-hover:text-blue-800 transition-colors">
+                      Voir les détails &rarr;
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              </Link>
+              );
+            })}
           </div>
         )}
       </div>

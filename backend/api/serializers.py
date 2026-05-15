@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Quote, QuoteDocument, JobApplication, Post, Portfolio, Setting, Analytics
+from .models import User, Quote, QuoteDocument, JobApplication, Post, Portfolio, PortfolioImagePair, Setting, Analytics
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -49,7 +49,14 @@ class PostSerializer(serializers.ModelSerializer):
         model = Post
         fields = '__all__'
 
+class PortfolioImagePairSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PortfolioImagePair
+        fields = ['id', 'image_before', 'image_after']
+
 class PortfolioSerializer(serializers.ModelSerializer):
+    image_pairs = PortfolioImagePairSerializer(many=True, read_only=True)
+
     class Meta:
         model = Portfolio
         fields = '__all__'

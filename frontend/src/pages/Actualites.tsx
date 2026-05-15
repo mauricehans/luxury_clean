@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { Calendar, Image as ImageIcon } from 'lucide-react';
 
@@ -49,7 +50,7 @@ const Actualites = () => {
         ) : (
           <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-3">
             {posts.map(post => (
-              <article key={post.id} className="flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-shadow duration-300">
+              <Link to={`/actualites/${post.id}`} key={post.id} className="flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-shadow duration-300">
                 {post.image ? (
                   <div className="h-48 w-full overflow-hidden">
                     <img 
@@ -73,17 +74,17 @@ const Actualites = () => {
                       day: 'numeric' 
                     })}
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">{post.title}</h3>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors">{post.title}</h3>
                   <p className="text-gray-600 line-clamp-4 flex-1">
                     {post.content}
                   </p>
                   <div className="mt-6">
-                    <button className="text-blue-600 font-semibold hover:text-blue-800 transition-colors">
+                    <span className="text-blue-600 font-semibold group-hover:text-blue-800 transition-colors">
                       Lire la suite &rarr;
-                    </button>
+                    </span>
                   </div>
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
         )}
