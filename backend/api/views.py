@@ -37,6 +37,11 @@ class QuoteViewSet(viewsets.ModelViewSet):
         
         # Handle multiple files
         files = self.request.FILES.getlist('documents')
+        
+        # Security: limit to 8 files maximum
+        if len(files) > 8:
+            files = files[:8]
+            
         from .models import QuoteDocument
         for f in files:
             QuoteDocument.objects.create(quote=quote, file=f)
@@ -101,64 +106,68 @@ class PortfolioViewSet(viewsets.ModelViewSet):
     def _handle_image_pairs(self, portfolio, is_update=False):
         from .models import PortfolioImagePair
         import json
+        import re
         
         # If updating, we clear the existing pairs and recreate them based on the request
         if is_update:
             portfolio.image_pairs.all().delete()
             
-            # Handle keeping existing pairs
+        existing_pairs = []
+        if is_update:
             existing_pairs_str = self.request.data.get('existing_pairs', '[]')
             try:
                 existing_pairs = json.loads(existing_pairs_str)
-                for pair_data in existing_pairs:
-                    # We just recreate the record with the old URLs (Django FileField handles relative paths fine if they exist)
-                    # We need to strip the /media/ prefix if it exists to match what Django expects in the DB
-                    before_url = pair_data.get('before', '')
-                    after_url = pair_data.get('after', '')
-                    
-                    # Clean URLs to prevent accumulation of prefixes
-                    if before_url.startswith('http://localhost:8000/media/'):
-                        before_url = before_url.replace('http://localhost:8000/media/', '')
-                    elif before_url.startswith('/media/'):
-                        before_url = before_url.replace('/media/', '')
-                        
-                    if after_url.startswith('http://localhost:8000/media/'):
-                        after_url = after_url.replace('http://localhost:8000/media/', '')
-                    elif after_url.startswith('/media/'):
-                        after_url = after_url.replace('/media/', '')
-                        
-                    PortfolioImagePair.objects.create(
-                        portfolio=portfolio,
-                        image_before=before_url if before_url else None,
-                        image_after=after_url if after_url else None
-                    )
             except json.JSONDecodeError:
                 pass
 
-        # Expecting new pairs in the format: image_before_0, image_after_0, image_before_1, image_after_1, etc.
-        i = 0
-        while True:
-            # We must check if the keys exist in request.data or FILES
+        # Find all indices from the keys
+        indices = set()
+        for key in list(self.request.data.keys()) + list(self.request.FILES.keys()):
+            match = re.match(r'^image_(?:before|after)_(\d+)', key)
+            if match:
+                indices.add(int(match.group(1)))
+                
+        # Also include indices from existing_pairs
+        for i in range(len(existing_pairs)):
+            indices.add(i)
+                
+        for i in sorted(list(indices)):
+            # Get existing URLs if available
+            before_url = ''
+            after_url = ''
+            if i < len(existing_pairs) and existing_pairs[i]:
+                before_url = existing_pairs[i].get('before', '')
+                after_url = existing_pairs[i].get('after', '')
+                
+                # Clean URLs
+                if before_url.startswith('http://localhost:8000/media/'):
+                    before_url = before_url.replace('http://localhost:8000/media/', '')
+                elif before_url.startswith('/media/'):
+                    before_url = before_url.replace('/media/', '')
+                    
+                if after_url.startswith('http://localhost:8000/media/'):
+                    after_url = after_url.replace('http://localhost:8000/media/', '')
+                elif after_url.startswith('/media/'):
+                    after_url = after_url.replace('/media/', '')
+            
+            before_file = self.request.FILES.get(f'image_before_{i}')
+            after_file = self.request.FILES.get(f'image_after_{i}')
             has_before_key = f'image_before_{i}' in self.request.data or f'image_before_{i}' in self.request.FILES or f'image_before_{i}_marker' in self.request.data
             has_after_key = f'image_after_{i}' in self.request.data or f'image_after_{i}' in self.request.FILES or f'image_after_{i}_marker' in self.request.data
             
-            # If neither key exists, we've reached the end of the new pairs
-            if not has_before_key and not has_after_key:
-                break
-                
-            before_file = self.request.FILES.get(f'image_before_{i}')
-            after_file = self.request.FILES.get(f'image_after_{i}')
+            # Use file if uploaded, otherwise use existing URL, otherwise None
+            final_before = before_file if before_file else (before_url if before_url else None)
+            final_after = after_file if after_file else (after_url if after_url else None)
             
-            # Create a pair if there is a file uploaded, OR if we are explicitly instructed to create a placeholder
-            if before_file or after_file or has_before_key or has_after_key:
-                # But don't create entirely empty pairs unless it's the only one
-                if before_file or after_file:
+            # Create a pair if there is a file/url, OR if explicitly instructed to create a placeholder
+            if final_before or final_after or has_before_key or has_after_key:
+                # But don't create entirely empty pairs
+                if final_before or final_after:
                     PortfolioImagePair.objects.create(
                         portfolio=portfolio,
-                        image_before=before_file if before_file else None,
-                        image_after=after_file if after_file else None
+                        image_before=final_before,
+                        image_after=final_after
                     )
-            i += 1
 
 class SettingViewSet(viewsets.ModelViewSet):
     queryset = Setting.objects.all()

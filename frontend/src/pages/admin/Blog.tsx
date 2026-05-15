@@ -139,8 +139,10 @@ const AdminBlog = () => {
       
       // Pass information about existing pairs that we want to keep
       const existingPairsToKeep = imagePairs
-        .filter(p => p.existingId || p.existingBeforeUrl || p.existingAfterUrl)
         .map(p => {
+          if (!p.existingId && !p.existingBeforeUrl && !p.existingAfterUrl) {
+             return null;
+          }
           // Clean URLs before sending back to server
           let bUrl = p.existingBeforeUrl || '';
           let aUrl = p.existingAfterUrl || '';
@@ -329,7 +331,7 @@ const AdminBlog = () => {
                   </div>
                 ) : (
                   imagePairs.map((pair, index) => (
-                    <div key={pair.id || index} className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border border-gray-200 rounded-md bg-gray-50 relative">
+                    <div key={pair.existingId || index} className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border border-gray-200 rounded-md bg-gray-50 relative">
                       <button 
                           type="button"
                           onClick={async () => {
@@ -349,8 +351,10 @@ const AdminBlog = () => {
                                   formData.append('description', content);
                                   
                                   const existingPairsToKeep = updatedPairs
-                                     .filter(p => p.existingId || p.existingBeforeUrl || p.existingAfterUrl)
                                      .map(p => {
+                                       if (!p.existingId && !p.existingBeforeUrl && !p.existingAfterUrl) {
+                                          return null;
+                                       }
                                        // Clean URLs before sending back to server
                                        let bUrl = p.existingBeforeUrl || '';
                                        let aUrl = p.existingAfterUrl || '';

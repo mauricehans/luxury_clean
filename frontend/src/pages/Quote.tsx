@@ -14,6 +14,7 @@ const Quote = () => {
 
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [fileError, setFileError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -38,19 +39,36 @@ const Quote = () => {
     }
   };
 
+  const handleFiles = (files: FileList | null) => {
+    setFileError('');
+    if (files && files.length > 0) {
+      const newFiles = Array.from(files);
+      if (selectedFiles.length + newFiles.length > 8) {
+        setFileError('Vous ne pouvez pas ajouter plus de 8 documents.');
+        // Only add up to the limit of 8
+        const allowedToAdd = 8 - selectedFiles.length;
+        if (allowedToAdd > 0) {
+          setSelectedFiles(prev => [...prev, ...newFiles.slice(0, allowedToAdd)]);
+        }
+      } else {
+        setSelectedFiles(prev => [...prev, ...newFiles]);
+      }
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setSelectedFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)]);
-    }
+    handleFiles(e.dataTransfer.files);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault();
-    if (e.target.files && e.target.files.length > 0) {
-      setSelectedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+    handleFiles(e.target.files);
+    // Reset the input value so the same file can be selected again if it was removed
+    if (inputRef.current) {
+        inputRef.current.value = '';
     }
   };
 
@@ -132,6 +150,11 @@ const Quote = () => {
 
     if (!isPhoneValid || !isEmailValid) {
       return; // Stop submission
+    }
+    
+    if (selectedFiles.length > 8) {
+      setFileError('Vous ne pouvez pas envoyer plus de 8 documents.');
+      return;
     }
     
     // Handle multiple files
@@ -279,9 +302,11 @@ const Quote = () => {
                         />
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500">PDF, Word ou Images jusqu'à 5MB par fichier</p>
+                    <p className="text-xs text-gray-500">PDF, Word ou Images jusqu'à 5MB par fichier (Maximum 8 documents)</p>
                   </div>
                 </div>
+                
+                {fileError && <p className="mt-2 text-sm text-red-600 font-medium">{fileError}</p>}
                 
                 {/* File list preview */}
                 {selectedFiles.length > 0 && (
