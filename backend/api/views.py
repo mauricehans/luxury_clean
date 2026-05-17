@@ -45,6 +45,37 @@ class QuoteViewSet(viewsets.ModelViewSet):
         from .models import QuoteDocument
         for f in files:
             QuoteDocument.objects.create(quote=quote, file=f)
+            
+        # Send email notification
+        from .utils import send_notification_email
+        import threading
+        
+        subject = f"Nouvelle demande de devis - {quote.client_type} - {quote.first_name} {quote.last_name}"
+        body = f"""Une nouvelle demande de devis a été reçue via le site web.
+
+Client: {quote.first_name} {quote.last_name} ({quote.client_type})
+Email: {quote.email}
+Téléphone: {quote.phone}
+Surface estimée: {quote.surface_m2 if quote.surface_m2 else 'Non précisée'} m²
+
+Message:
+{quote.message}
+
+Vous pouvez retrouver cette demande avec ses pièces jointes dans le panneau d'administration CRM.
+"""
+        
+        # Read file contents in memory before the request finishes
+        # because Django closes UploadedFile streams when the response is returned
+        attachments = []
+        for f in files:
+            f.seek(0)
+            attachments.append((f.name, f.read(), f.content_type))
+            
+        # Run email sending in a separate thread to not block the response
+        def send_email_async():
+            send_notification_email(subject, body, attachments)
+            
+        threading.Thread(target=send_email_async).start()
 
     @action(detail=True, methods=['patch'])
     def read(self, request, pk=None):
@@ -67,6 +98,47 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return JobApplicationCreateSerializer
         return JobApplicationSerializer
+
+    def perform_create(self, serializer):
+        ip = self.request.META.get('REMOTE_ADDR', '')
+        job = serializer.save(ip_address=ip)
+        
+        # Send email notification
+        from .utils import send_notification_email
+        import threading
+        
+        subject = f"Nouvelle candidature - {job.first_name} {job.last_name}"
+        body = f"""Une nouvelle candidature a été reçue via le site web.
+
+Candidat: {job.first_name} {job.last_name}
+Email: {job.email}
+Téléphone: {job.phone}
+
+Message de motivation:
+{job.message}
+
+Vous pouvez retrouver cette candidature avec les CV/lettre de motivation dans le panneau d'administration CRM.
+"""
+        
+        # Collect files from request to attach them
+        files = []
+        if 'cv' in self.request.FILES:
+            files.append(self.request.FILES['cv'])
+        if 'cover_letter' in self.request.FILES:
+            files.append(self.request.FILES['cover_letter'])
+            
+        # Read file contents in memory before the request finishes
+        # because Django closes UploadedFile streams when the response is returned
+        attachments = []
+        for f in files:
+            f.seek(0)
+            attachments.append((f.name, f.read(), f.content_type))
+            
+        # Run email sending in a separate thread to not block the response
+        def send_email_async():
+            send_notification_email(subject, body, attachments)
+            
+        threading.Thread(target=send_email_async).start()
 
     @action(detail=True, methods=['patch'])
     def read(self, request, pk=None):
