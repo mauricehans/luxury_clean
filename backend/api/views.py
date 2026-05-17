@@ -100,8 +100,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
         return JobApplicationSerializer
 
     def perform_create(self, serializer):
-        ip = self.request.META.get('REMOTE_ADDR', '')
-        job = serializer.save(ip_address=ip)
+        job = serializer.save()
         
         # Send email notification
         from .utils import send_notification_email
@@ -117,15 +116,13 @@ Téléphone: {job.phone}
 Message de motivation:
 {job.message}
 
-Vous pouvez retrouver cette candidature avec les CV/lettre de motivation dans le panneau d'administration CRM.
+Vous pouvez retrouver cette candidature avec le CV dans le panneau d'administration CRM.
 """
         
         # Collect files from request to attach them
         files = []
-        if 'cv' in self.request.FILES:
-            files.append(self.request.FILES['cv'])
-        if 'cover_letter' in self.request.FILES:
-            files.append(self.request.FILES['cover_letter'])
+        if 'cv_file' in self.request.FILES:
+            files.append(self.request.FILES['cv_file'])
             
         # Read file contents in memory before the request finishes
         # because Django closes UploadedFile streams when the response is returned
